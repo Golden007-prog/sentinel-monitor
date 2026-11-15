@@ -135,7 +135,7 @@ if __name__ == "__main__":
     except FileNotFoundError:
         app_config = load_config("targets.yaml")
 
-    print(f"Starting concurrent checks for {len(app_config.sites)} sites...\\n")
+    print(f"Starting concurrent checks for {len(app_config.sites)} sites...\n")
 
     start_total = time.perf_counter()
     results = asyncio.run(run_all_checks(app_config.sites, app_config.timeout))
@@ -153,4 +153,4 @@ if __name__ == "__main__":
         if res.ssl_metadata_error:
             print(f"    SSL metadata unavailable: {res.ssl_metadata_error}")
 
-    print(f"\\nTotal execution time for all sites: {total_time:.2f} seconds")
+    print(f"\nTotal execution time for all sites: {total_time:.2f} seconds")
