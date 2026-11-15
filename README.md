@@ -30,6 +30,7 @@ Managing multiple projects means keeping track of domain health and SSL expirati
 - **SSL health tracking** — extracts certificate expiry directly via raw TCP sockets, no third-party APIs
 - **Responsive terminal UI** — color-coded output that adapts to your terminal width
 - **Declarative config** — define all your targets in a single YAML file
+- **Independent health signals** — network reachability, HTTP status, and TLS certificate validity are reported separately
 - **Graceful error handling** — DNS failures, timeouts, and connection drops are caught and reported per site without crashing
 
 ---
