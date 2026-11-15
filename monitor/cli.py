@@ -119,10 +119,13 @@ def print_table(results):
         ssl_raw = res.ssl_days_left
 
         if isinstance(ssl_raw, int):
+            invalid_suffix = " (INVALID)" if res.ssl_validation_error else ""
             if ssl_raw < 7:
-                ssl_str = term.bold_red(f"{ssl_raw} days (CRITICAL)")
+                ssl_str = term.bold_red(f"{ssl_raw} days (CRITICAL){invalid_suffix}")
             elif ssl_raw < 30:
-                ssl_str = term.yellow(f"{ssl_raw} days (WARN)")
+                ssl_str = term.yellow(f"{ssl_raw} days (WARN){invalid_suffix}")
+            elif res.ssl_validation_error:
+                ssl_str = term.bold_red(f"{ssl_raw} days (INVALID)")
             else:
                 ssl_str = term.green(f"{ssl_raw} days")
         else:
@@ -151,6 +154,10 @@ def print_table(results):
 
         if res.error_msg:
             print(term.red(f"Error: {res.error_msg}"))
+        if res.ssl_validation_error:
+            print(term.red(f"SSL validation failed: {res.ssl_validation_error}"))
+        if res.ssl_metadata_error and res.ssl_days_left == "Unavailable":
+            print(term.red(f"SSL metadata unavailable: {res.ssl_metadata_error}"))
 
     print(divider)
     print()
