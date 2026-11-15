@@ -43,7 +43,7 @@ def print_table(results):
 
     # fixed columns
     fixed = {
-        "status": 8,
+        "status": 12,
         "code": 10,
         "rtime": 14,
         "ssl": 24,
@@ -109,12 +109,15 @@ def print_table(results):
     print(divider)
 
     for res in results:
-        if res.is_up:
+        if not res.is_reachable:
+            status_str = term.bold_red("DOWN")
+            code_str = term.red(str(res.status_code) if res.status_code else "-")
+        elif res.is_up:
             status_str = term.bold_green("UP")
             code_str = term.green(str(res.status_code))
         else:
-            status_str = term.bold_red("DOWN")
-            code_str = term.red(str(res.status_code) if res.status_code else "-")
+            status_str = term.bold_yellow("HTTP ERROR")
+            code_str = term.yellow(str(res.status_code))
 
         ssl_raw = res.ssl_days_left
 
