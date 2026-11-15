@@ -27,6 +27,7 @@ async def test_site_is_up(site):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is True
+    assert result.is_reachable is True
     assert result.status_code == 200
     assert result.name == "Test Site"
     assert result.url == "https://example.com"
@@ -36,7 +37,7 @@ async def test_site_is_up(site):
 
 @pytest.mark.asyncio
 async def test_site_is_down(site):
-    """A 4xx response marks the site as down."""
+    """A 4xx response is reachable but is not a healthy HTTP result."""
     mock_response = MagicMock()
     mock_response.status_code = 404
 
@@ -47,6 +48,7 @@ async def test_site_is_down(site):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is False
+    assert result.is_reachable is True
     assert result.status_code == 404
     assert result.error_msg == ""
 
@@ -63,6 +65,7 @@ async def test_request_error(site):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is False
+    assert result.is_reachable is False
     assert result.status_code == 0
     assert "DNS resolution failed" in result.error_msg
     assert result.ssl_days_left == "DNS Lookup Failed"
@@ -97,6 +100,7 @@ async def test_http_and_ssl_checks_overlap(site):
         release_ssl.set()
 
     assert result.is_up is True
+    assert result.is_reachable is True
     assert result.ssl_days_left == 45
 
 
@@ -115,6 +119,7 @@ async def test_ssl_failure_does_not_discard_http_result(site):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is True
+    assert result.is_reachable is True
     assert result.status_code == 200
     assert result.ssl_days_left.startswith("SSL check failed:")
     assert "unexpected TLS inspection error" in result.ssl_days_left
@@ -163,5 +168,25 @@ async def test_invalid_certificate_is_reported_separately_from_http_reachability
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is True
+    assert result.is_reachable is True
     assert result.ssl_days_left == -2
     assert "expired" in result.ssl_validation_error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [403, 404, 500, 503])
+async def test_http_error_status_is_reachable_but_not_up(site, status_code):
+    """Any received HTTP response proves reachability, even for error statuses."""
+    mock_response = MagicMock()
+    mock_response.status_code = status_code
+
+    mock_client = AsyncMock()
+    mock_client.head.return_value = mock_response
+
+    with patch("monitor.checker.inspect_ssl_certificate", return_value=60):
+        result = await check_uptime(mock_client, site)
+
+    assert result.is_reachable is True
+    assert result.is_up is False
+    assert result.status_code == status_code
+    assert result.error_msg == ""
