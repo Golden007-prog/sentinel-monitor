@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
     "blessed>=1.42.0",
+    "cryptography==46.0.4",
     "httpx>=0.28.1",
     "pyyaml>=6.0.3",
 ]

@@ -6,6 +6,7 @@ import pytest
 
 from monitor.checker import SiteResult, check_uptime, run_all_checks
 from monitor.config import SiteConfig
+from monitor.ssl_utils import SSLInspectionResult
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ async def test_site_is_up(site):
     mock_client = AsyncMock()
     mock_client.head.return_value = mock_response
 
-    with patch("monitor.checker.get_ssl_expiry_days", return_value=60):
+    with patch("monitor.checker.inspect_ssl_certificate", return_value=60):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is True
@@ -42,7 +43,7 @@ async def test_site_is_down(site):
     mock_client = AsyncMock()
     mock_client.head.return_value = mock_response
 
-    with patch("monitor.checker.get_ssl_expiry_days", return_value=60):
+    with patch("monitor.checker.inspect_ssl_certificate", return_value=60):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is False
@@ -58,7 +59,7 @@ async def test_request_error(site):
     mock_client = AsyncMock()
     mock_client.head.side_effect = httpx.RequestError("DNS resolution failed")
 
-    with patch("monitor.checker.get_ssl_expiry_days", return_value="DNS Lookup Failed"):
+    with patch("monitor.checker.inspect_ssl_certificate", return_value="DNS Lookup Failed"):
         result = await check_uptime(mock_client, site)
 
     assert result.is_up is False
@@ -90,7 +91,7 @@ async def test_http_and_ssl_checks_overlap(site):
     mock_client.head.side_effect = respond_after_ssl_starts
 
     try:
-        with patch("monitor.checker.get_ssl_expiry_days", side_effect=inspect_ssl):
+        with patch("monitor.checker.inspect_ssl_certificate", side_effect=inspect_ssl):
             result = await check_uptime(mock_client, site)
     finally:
         release_ssl.set()
@@ -108,7 +109,7 @@ async def test_ssl_failure_does_not_discard_http_result(site):
     mock_client.head.return_value = mock_response
 
     with patch(
-        "monitor.checker.get_ssl_expiry_days",
+        "monitor.checker.inspect_ssl_certificate",
         side_effect=RuntimeError("unexpected TLS inspection error"),
     ):
         result = await check_uptime(mock_client, site)
@@ -131,7 +132,7 @@ async def test_run_all_checks_returns_all_results():
     mock_response.status_code = 200
 
     with (
-        patch("monitor.checker.get_ssl_expiry_days", return_value=90),
+        patch("monitor.checker.inspect_ssl_certificate", return_value=90),
         patch(
             "httpx.AsyncClient.head",
             new_callable=AsyncMock,
@@ -143,3 +144,24 @@ async def test_run_all_checks_returns_all_results():
     assert len(results) == 2
     assert all(isinstance(r, SiteResult) for r in results)
     assert all(r.is_up for r in results)
+
+
+
+@pytest.mark.asyncio
+async def test_invalid_certificate_is_reported_separately_from_http_reachability(site):
+    """A reachable HTTP endpoint must not make an invalid TLS certificate healthy."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_client = AsyncMock()
+    mock_client.head.return_value = mock_response
+
+    inspection = SSLInspectionResult(
+        days_left=-2,
+        validation_error="Certificate validation failed: certificate has expired",
+    )
+    with patch("monitor.checker.inspect_ssl_certificate", return_value=inspection):
+        result = await check_uptime(mock_client, site)
+
+    assert result.is_up is True
+    assert result.ssl_days_left == -2
+    assert "expired" in result.ssl_validation_error
