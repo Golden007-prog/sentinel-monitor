@@ -92,7 +92,8 @@ def inspect_ssl_certificate(
                 metadata_error="Invalid HTTPS URL",
             )
 
-        port = parsed_url.port or 443
+        parsed_port = parsed_url.port
+        port = 443 if parsed_port is None else parsed_port
         certificate_der = _connect_and_get_certificate(hostname, port, timeout)
         certificate = x509.load_der_x509_certificate(certificate_der)
         days_left = (certificate.not_valid_after_utc - datetime.now(UTC)).days
