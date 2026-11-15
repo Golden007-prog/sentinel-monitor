@@ -10,7 +10,7 @@ from monitor.ssl_utils import SSLInspectionResult, inspect_ssl_certificate
 
 @dataclass
 class SiteResult:
-    """Stores the result of a single website check."""
+    """Stores independent HTTP reachability, endpoint health, and TLS results."""
 
     name: str
     url: str
@@ -21,6 +21,7 @@ class SiteResult:
     error_msg: str = ""
     ssl_validation_error: str = ""
     ssl_metadata_error: str = ""
+    is_reachable: bool = False
 
 
 async def _probe_http(
@@ -43,9 +44,9 @@ async def check_uptime(client: httpx.AsyncClient, site: SiteConfig) -> SiteResul
     """
     Check HTTP reachability and SSL inspection concurrently for one site.
 
-    HTTP reachability, certificate metadata, and certificate trust validation
-    are independent outcomes. An invalid certificate must remain visible even
-    when the HTTP endpoint itself is reachable.
+    A received HTTP response proves that the endpoint is reachable, regardless
+    of its status code. is_up separately indicates whether the HTTP status is
+    below 400. Certificate metadata and TLS trust validation are independent.
     """
     http_task = asyncio.create_task(_probe_http(client, site))
     ssl_task = asyncio.create_task(asyncio.to_thread(inspect_ssl_certificate, site.url))
@@ -103,6 +104,7 @@ async def check_uptime(client: httpx.AsyncClient, site: SiteConfig) -> SiteResul
             ssl_days_left=ssl_days,
             ssl_validation_error=ssl_validation_error,
             ssl_metadata_error=ssl_metadata_error,
+            is_reachable=False,
         )
 
     return SiteResult(
@@ -114,13 +116,14 @@ async def check_uptime(client: httpx.AsyncClient, site: SiteConfig) -> SiteResul
         ssl_days_left=ssl_days,
         ssl_validation_error=ssl_validation_error,
         ssl_metadata_error=ssl_metadata_error,
+        is_reachable=True,
     )
 
 
 async def run_all_checks(
     sites: list[SiteConfig], timeout: int
 ) -> list[SiteResult]:
-    """Check all configured sites concurrently using a shared HTTP client."""
+    """Check all sites concurrently using a shared HTTP client."""
     async with httpx.AsyncClient(timeout=timeout) as client:
         tasks = [check_uptime(client, site) for site in sites]
         return await asyncio.gather(*tasks)
@@ -132,14 +135,14 @@ if __name__ == "__main__":
     except FileNotFoundError:
         app_config = load_config("targets.yaml")
 
-    print(f"Starting concurrent checks for {len(app_config.sites)} sites...\n")
+    print(f"Starting concurrent checks for {len(app_config.sites)} sites...\\n")
 
     start_total = time.perf_counter()
     results = asyncio.run(run_all_checks(app_config.sites, app_config.timeout))
     total_time = time.perf_counter() - start_total
 
     for res in results:
-        status = "UP" if res.is_up else "DOWN"
+        status = "DOWN" if not res.is_reachable else ("UP" if res.is_up else "HTTP ERROR")
         print(
             f"{status} | {res.status_code} | {res.response_time_ms}ms | {res.name} ({res.url})"
         )
@@ -150,4 +153,4 @@ if __name__ == "__main__":
         if res.ssl_metadata_error:
             print(f"    SSL metadata unavailable: {res.ssl_metadata_error}")
 
-    print(f"\nTotal execution time for all sites: {total_time:.2f} seconds")
+    print(f"\\nTotal execution time for all sites: {total_time:.2f} seconds")
