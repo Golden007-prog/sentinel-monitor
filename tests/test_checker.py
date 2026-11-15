@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from monitor.checker import SiteResult, check_uptime, run_all_checks
-from monitor.ssl_utils import SSLInspectionResult
 from monitor.config import SiteConfig
+from monitor.ssl_utils import SSLInspectionResult
 
 
 @pytest.fixture
