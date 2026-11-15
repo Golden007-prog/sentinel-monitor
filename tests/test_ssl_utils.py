@@ -38,6 +38,7 @@ def trusted_ca(tmp_path_factory):
         .not_valid_before(now - timedelta(days=1))
         .not_valid_after(now + timedelta(days=365))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key), critical=False)
         .sign(key, hashes.SHA256())
     )
     ca_path = directory / "ca.pem"
@@ -72,6 +73,10 @@ def _create_server_certificate(
             critical=False,
         )
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(signing_key),
+            critical=False,
+        )
         .sign(signing_key, hashes.SHA256())
     )
 
