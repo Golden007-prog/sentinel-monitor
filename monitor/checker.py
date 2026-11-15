@@ -74,7 +74,11 @@ async def check_uptime(client: httpx.AsyncClient, site: SiteConfig) -> SiteResul
     if isinstance(ssl_result, SSLInspectionResult):
         ssl_days: int | str
         if ssl_result.days_left is None:
-            ssl_days = "Unavailable"
+            ssl_days = (
+                "Not HTTPS"
+                if ssl_result.metadata_error == "Not HTTPS"
+                else "Unavailable"
+            )
         else:
             ssl_days = ssl_result.days_left
         ssl_validation_error = ssl_result.validation_error or ""
