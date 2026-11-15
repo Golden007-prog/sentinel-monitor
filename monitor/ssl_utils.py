@@ -26,12 +26,15 @@ class SSLInspectionResult:
 
 
 def _connect_and_get_certificate(
-    hostname: str, port: int, timeout: int
+    hostname: str, port: int, timeout: int, *, verify: bool, cafile: str | None
 ) -> bytes:
-    """Retrieve the peer certificate without treating it as trusted."""
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    """Return the peer certificate, optionally enforcing normal TLS validation."""
+    if verify:
+        context = ssl.create_default_context(cafile=cafile)
+    else:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
 
     with (
         socket.create_connection((hostname, port), timeout=timeout) as sock,
@@ -45,17 +48,9 @@ def _connect_and_get_certificate(
     return certificate
 
 
-def _validate_certificate(
-    hostname: str, port: int, timeout: int, cafile: str | None
-) -> None:
-    """Perform a normal TLS handshake with chain and hostname verification."""
-    context = ssl.create_default_context(cafile=cafile)
-
-    with (
-        socket.create_connection((hostname, port), timeout=timeout) as sock,
-        context.wrap_socket(sock, server_hostname=hostname),
-    ):
-        pass
+def _days_until_expiry(certificate_der: bytes) -> int:
+    certificate = x509.load_der_x509_certificate(certificate_der)
+    return (certificate.not_valid_after_utc - datetime.now(UTC)).days
 
 
 def _describe_error(error: Exception) -> str:
@@ -72,31 +67,58 @@ def inspect_ssl_certificate(
     """
     Inspect certificate expiry independently from TLS trust validation.
 
-    The first connection retrieves the peer certificate without verification so
-    expired or untrusted certificates can still be inspected. A second
-    connection uses the normal trust store and hostname verification. Metadata
-    retrieval alone is never treated as proof that a certificate is valid.
+    A normal verified handshake is attempted first. If it fails specifically
+    because certificate verification failed, a second unverified handshake is
+    used only to retrieve the certificate metadata. The failed validation
+    remains attached to the result; the fallback never establishes trust.
     """
     try:
         parsed_url = urlparse(url)
         if parsed_url.scheme != "https":
-            return SSLInspectionResult(
-                days_left=None,
-                metadata_error="Not HTTPS",
-            )
+            return SSLInspectionResult(days_left=None, metadata_error="Not HTTPS")
 
         hostname = parsed_url.hostname
         if not hostname:
             return SSLInspectionResult(
-                days_left=None,
-                metadata_error="Invalid HTTPS URL",
+                days_left=None, metadata_error="Invalid HTTPS URL"
             )
 
         parsed_port = parsed_url.port
         port = 443 if parsed_port is None else parsed_port
-        certificate_der = _connect_and_get_certificate(hostname, port, timeout)
-        certificate = x509.load_der_x509_certificate(certificate_der)
-        days_left = (certificate.not_valid_after_utc - datetime.now(UTC)).days
+
+    except ValueError as error:
+        return SSLInspectionResult(
+            days_left=None,
+            metadata_error=f"Invalid HTTPS URL: {_describe_error(error)}",
+        )
+
+    try:
+        certificate_der = _connect_and_get_certificate(
+            hostname, port, timeout, verify=True, cafile=cafile
+        )
+    except ssl.SSLCertVerificationError as validation_error:
+        validation_message = (
+            f"Certificate validation failed: {_describe_error(validation_error)}"
+        )
+        try:
+            certificate_der = _connect_and_get_certificate(
+                hostname, port, timeout, verify=False, cafile=None
+            )
+            days_left = _days_until_expiry(certificate_der)
+        except (OSError, ssl.SSLError, ValueError) as metadata_error:
+            return SSLInspectionResult(
+                days_left=None,
+                metadata_error=(
+                    "Certificate metadata unavailable: "
+                    f"{_describe_error(metadata_error)}"
+                ),
+                validation_error=validation_message,
+            )
+
+        return SSLInspectionResult(
+            days_left=days_left,
+            validation_error=validation_message,
+        )
 
     except (OSError, ssl.SSLError, ValueError) as error:
         return SSLInspectionResult(
@@ -105,17 +127,17 @@ def inspect_ssl_certificate(
         )
 
     try:
-        _validate_certificate(hostname, port, timeout, cafile)
-    except (OSError, ssl.SSLError, ValueError) as error:
+        days_left = _days_until_expiry(certificate_der)
+    except ValueError as error:
         return SSLInspectionResult(
-            days_left=days_left,
-            validation_error=f"Certificate validation failed: {_describe_error(error)}",
+            days_left=None,
+            metadata_error=f"Certificate metadata unavailable: {_describe_error(error)}",
         )
 
     return SSLInspectionResult(days_left=days_left)
 
 
-# Backwards-compatible name for callers that only need the expiry value.
+# Backwards-compatible name for callers that only need a trusted expiry value.
 def get_ssl_expiry_days(url: str, timeout: int = 5) -> int | str:
     result = inspect_ssl_certificate(url, timeout=timeout)
     if result.days_left is None:
