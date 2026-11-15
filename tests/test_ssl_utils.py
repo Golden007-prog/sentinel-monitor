@@ -4,7 +4,6 @@ import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
