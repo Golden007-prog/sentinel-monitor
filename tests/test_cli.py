@@ -54,7 +54,7 @@ def test_print_table_does_not_duplicate_tls_verification_error(capsys):
 
     assert output.count("self-signed certificate in certificate chain") == 1
     assert "Error:" not in output
-    assert "SSL validation failed:" in output
+    assert "[ITS] TLS validation failed" in output
 
 
 
