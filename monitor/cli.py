@@ -108,6 +108,8 @@ def print_table(results):
     print(header)
     print(divider)
 
+    diagnostics = []
+
     for res in results:
         if not res.is_reachable:
             status_str = term.bold_red("DOWN")
@@ -151,23 +153,34 @@ def print_table(results):
                 cell(ssl_str,                           col["ssl"])
             )
 
-
         print(row)
 
-        # A TLS verification failure is also surfaced by the independent SSL check.
-        # Avoid printing the same handshake failure twice.
+        # Keep diagnostics out of the status table so every site remains one row.
         if res.error_msg and not res.ssl_validation_error:
-            print(term.red(f"Error: {res.error_msg}"))
+            diagnostics.append((res.name, "Request failed", res.error_msg))
         if res.ssl_validation_error:
-            print(term.red(f"SSL validation failed: {res.ssl_validation_error}"))
+            diagnostics.append(
+                (res.name, "TLS validation failed", res.ssl_validation_error)
+            )
         if (
             res.ssl_metadata_error
             and res.ssl_metadata_error != "Not HTTPS"
             and res.ssl_days_left == "Unavailable"
         ):
-            print(term.red(f"SSL metadata unavailable: {res.ssl_metadata_error}"))
+            diagnostics.append(
+                (res.name, "SSL metadata unavailable", res.ssl_metadata_error)
+            )
 
     print(divider)
+
+    if diagnostics:
+        print()
+        print(term.bold("Diagnostics"))
+        print(term.dim("-" * min(total_w, 80)))
+        for site_name, category, message in diagnostics:
+            print(term.bold_cyan(f"[{site_name}] {category}"))
+            print(f"    {term.red(message)}")
+
     print()
 
 

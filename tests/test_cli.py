@@ -54,4 +54,61 @@ def test_print_table_does_not_duplicate_tls_verification_error(capsys):
 
     assert output.count("self-signed certificate in certificate chain") == 1
     assert "Error:" not in output
-    assert "SSL validation failed:" in output
+    assert "[ITS] TLS validation failed" in output
+
+
+
+def test_print_table_separates_diagnostics_from_site_rows(capsys):
+    """Diagnostics are grouped below the table rather than splitting site rows."""
+    results = [
+        SiteResult(
+            name="Example",
+            url="https://example.com",
+            is_up=True,
+            status_code=200,
+            response_time_ms=20.0,
+            ssl_days_left=30,
+            is_reachable=True,
+        ),
+        SiteResult(
+            name="ITS",
+            url="https://its.example.com",
+            is_up=False,
+            status_code=0,
+            response_time_ms=25.0,
+            ssl_days_left=-5,
+            error_msg="connection failed",
+            ssl_validation_error="self-signed certificate",
+            is_reachable=False,
+        ),
+    ]
+
+    print_table(results)
+    output = capsys.readouterr().out
+
+    table_end = output.index("\nDiagnostics")
+    diagnostics_start = output.index("[ITS] TLS validation failed")
+
+    assert output.index("Example") < table_end
+    assert output.index("ITS") < table_end
+    assert table_end < diagnostics_start
+    assert "connection failed" not in output  # TLS validation is the useful diagnosis.
+    assert "self-signed certificate" in output
+
+
+def test_print_table_omits_empty_diagnostics_section(capsys):
+    """A clean run should show only the site table."""
+    result = SiteResult(
+        name="Example",
+        url="https://example.com",
+        is_up=True,
+        status_code=200,
+        response_time_ms=20.0,
+        ssl_days_left=30,
+        is_reachable=True,
+    )
+
+    print_table([result])
+    output = capsys.readouterr().out
+
+    assert "Diagnostics" not in output
