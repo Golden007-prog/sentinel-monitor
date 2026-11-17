@@ -146,7 +146,7 @@ if __name__ == "__main__":
         print(
             f"{status} | {res.status_code} | {res.response_time_ms}ms | {res.name} ({res.url})"
         )
-        if res.error_msg:
+        if res.error_msg and not res.ssl_validation_error:
             print(f"    Error: {res.error_msg}")
         if res.ssl_validation_error:
             print(f"    SSL validation failed: {res.ssl_validation_error}")
