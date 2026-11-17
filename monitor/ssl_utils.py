@@ -54,6 +54,8 @@ def _days_until_expiry(certificate_der: bytes) -> int:
 
 
 def _describe_error(error: Exception) -> str:
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return error.verify_message
     if isinstance(error, socket.gaierror):
         return f"DNS lookup failed: {error}"
     if isinstance(error, TimeoutError):
