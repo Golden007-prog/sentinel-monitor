@@ -44,7 +44,7 @@ def test_print_table_does_not_duplicate_tls_verification_error(capsys):
             "self-signed certificate in certificate chain (_ssl.c:1032)"
         ),
         ssl_validation_error=(
-            "Certificate validation failed: self-signed certificate in certificate chain"
+            "self-signed certificate in certificate chain"
         ),
         is_reachable=False,
     )
