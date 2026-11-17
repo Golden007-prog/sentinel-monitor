@@ -54,6 +54,8 @@ def _days_until_expiry(certificate_der: bytes) -> int:
 
 
 def _describe_error(error: Exception) -> str:
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return error.verify_message or str(error)
     if isinstance(error, socket.gaierror):
         return f"DNS lookup failed: {error}"
     if isinstance(error, TimeoutError):
@@ -97,9 +99,7 @@ def inspect_ssl_certificate(
             hostname, port, timeout, verify=True, cafile=cafile
         )
     except ssl.SSLCertVerificationError as validation_error:
-        validation_message = (
-            f"Certificate validation failed: {_describe_error(validation_error)}"
-        )
+        validation_message = _describe_error(validation_error)
         try:
             certificate_der = _connect_and_get_certificate(
                 hostname, port, timeout, verify=False, cafile=None
