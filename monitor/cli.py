@@ -154,7 +154,9 @@ def print_table(results):
 
         print(row)
 
-        if res.error_msg:
+        # A TLS verification failure is also surfaced by the independent SSL check.
+        # Avoid printing the same handshake failure twice.
+        if res.error_msg and not res.ssl_validation_error:
             print(term.red(f"Error: {res.error_msg}"))
         if res.ssl_validation_error:
             print(term.red(f"SSL validation failed: {res.ssl_validation_error}"))
