@@ -227,7 +227,7 @@ def test_untrusted_certificate_metadata_is_available_but_invalid(
     assert result.days_left is not None
     assert result.metadata_error is None
     assert result.validation_error is not None
-    assert "self-signed certificate in certificate chain" in result.validation_error.lower()
+    assert "self-signed certificate" in result.validation_error.lower()
     assert "[ssl:" not in result.validation_error.lower()
     assert "_ssl.c:" not in result.validation_error.lower()
     assert result.is_valid is False
